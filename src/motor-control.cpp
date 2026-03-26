@@ -1523,6 +1523,13 @@ void resetPositionRight() {
     resetPositionWithSensor(right_sensor, right_sensor_offset, 90.0, field_half_size);
 }
 
+void resetPositionBack() {
+  resetPositionWithSensor(back_sensor, back_sensor_offset, 180.0, field_half_size);
+}
+
+void resetPositionFront() {
+  resetPositionWithSensor(front_sensor, front_sensor_offset, 0.0, field_half_size);
+}
 // ============================================================================
 // TEMPLATE NOTE
 // ============================================================================

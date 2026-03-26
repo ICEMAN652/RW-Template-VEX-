@@ -48,6 +48,8 @@ rotation vertical_tracker = rotation(PORT19, true);
 // Set these to random ports if you are not using distance resets
 distance left_sensor = distance(PORT3);
 distance right_sensor = distance(PORT10);
+distance back_sensor = distance(PORT8);
+distance front_sensor = distance(PORT18);
 
 
 // ============================================================================
@@ -75,7 +77,7 @@ double heading_correction_kp = 0.6, heading_correction_ki = 0, heading_correctio
 
 // Enable or disable the use of tracking wheels
 bool using_horizontal_tracker = false;  // Set to true if a horizontal tracking wheel is installed and used for odometry
-bool using_vertical_tracker = false;   // Set to true if a vertical tracking wheel is installed and used for odometry
+bool using_vertical_tracker = true;   // Set to true if a vertical tracking wheel is installed and used for odometry
 
 
 // IGNORE THESE IF YOU ARE NOT USING TRACKING WHEELS
@@ -89,6 +91,8 @@ double vertical_tracker_diameter = 1.975; // Diameter of the vertical tracker wh
 
 double left_sensor_offset = 5.5;
 double right_sensor_offset = 5.5;
+double back_sensor_offset = 5.5;
+double front_sensor_offset = 5.5;
 
 
 // ============================================================================

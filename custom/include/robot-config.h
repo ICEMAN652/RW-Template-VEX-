@@ -24,6 +24,8 @@ extern digital_out midgoal;
 extern rotation horizontal_tracker;
 extern rotation vertical_tracker;
 extern distance left_sensor;
+extern distance back_sensor;
+extern distance front_sensor;
 extern distance right_sensor;
 
 extern motor intake1;
@@ -48,6 +50,8 @@ extern double horizontal_tracker_diameter;
 extern double vertical_tracker_diameter;
 extern double left_sensor_offset;
 extern double right_sensor_offset;
+extern double front_sensor_offset;
+extern double back_sensor_offset;
 
 
 extern bool heading_correction;
