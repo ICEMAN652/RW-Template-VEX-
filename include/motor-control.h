@@ -43,3 +43,17 @@ void resetPositionFront();
 void resetPositionBack();
 void resetPositionLeft();
 void resetPositionRight();
+
+// Sensor descriptor for distanceReset - configure offsetX/offsetY per your robot geometry.
+// offsetX: lateral offset from robot center, perpendicular to sensor pointing direction (inches)
+// offsetY: distance from robot center to sensor face, along sensor pointing direction (inches)
+struct DistResetSensor {
+    vex::distance* sensor;  // nullptr if this sensor position is not installed
+    double offsetX;
+    double offsetY;
+};
+
+// Resets x and y position using distance sensors with angle correction for slight misalignment.
+// xDirection: which sensor faces the x-axis wall ('F'=front, 'B'=back, 'R'=right, 'L'=left)
+// yDirection: which sensor faces the y-axis wall ('F'=front, 'B'=back, 'R'=right, 'L'=left)
+void distanceReset(char xDirection, char yDirection);
