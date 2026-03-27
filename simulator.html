@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VEX Push Back — Auton Simulator</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #12141a; color: #e0e0e0; font-family: 'Courier New', monospace; display: flex; height: 100vh; overflow: hidden; }
+
+#sidebar {
+  width: 280px; min-width: 280px;
+  background: #1a1d26;
+  border-right: 1px solid #2a2d3a;
+  display: flex; flex-direction: column;
+  padding: 14px; gap: 12px;
+  overflow-y: auto;
+}
+
+#main {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #0e1016; padding: 16px;
+}
+
+canvas {
+  border: 1px solid #2a2d3a;
+  border-radius: 4px;
+  cursor: crosshair;
+  user-select: none;
+}
+.place-hint {
+  font-size: 10px; color: #666; margin-top: 2px; font-style: italic;
+}
+
+h1 { font-size: 15px; color: #e94560; letter-spacing: 2px; text-transform: uppercase; }
+
+.section-label {
+  font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;
+}
+
+select, input[type=number] {
+  width: 100%; padding: 6px 8px;
+  background: #12141a; border: 1px solid #2a2d3a;
+  color: #e0e0e0; border-radius: 3px;
+  font-family: inherit; font-size: 12px;
+}
+
+select:focus, input:focus { outline: none; border-color: #e94560; }
+
+.start-row { display: flex; gap: 6px; }
+.start-row input { flex: 1; }
+.start-row .lbl { font-size: 10px; color: #666; text-align: center; margin-top: 2px; }
+
+.btn-row { display: flex; gap: 6px; }
+button {
+  flex: 1; padding: 7px 4px;
+  background: #1e2130; border: 1px solid #2a2d3a;
+  color: #e0e0e0; border-radius: 3px;
+  font-family: inherit; font-size: 12px; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+button:hover { background: #e94560; border-color: #e94560; color: #fff; }
+button:disabled { opacity: 0.35; cursor: default; }
+button:disabled:hover { background: #1e2130; border-color: #2a2d3a; color: #e0e0e0; }
+
+.speed-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+input[type=range] {
+  flex: 1; height: 4px; accent-color: #e94560;
+}
+
+.hud {
+  background: #12141a; border: 1px solid #2a2d3a; border-radius: 3px;
+  padding: 8px; font-size: 11px; line-height: 1.8;
+}
+.hud span { color: #00e5ff; }
+
+#cmdLog {
+  background: #12141a; border: 1px solid #2a2d3a; border-radius: 3px;
+  padding: 6px; font-size: 10px; height: 200px; overflow-y: auto;
+  flex: 1;
+}
+.cmd-entry {
+  padding: 2px 4px; border-radius: 2px; cursor: pointer; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmd-entry:hover { background: #1e2130; }
+.cmd-entry.active { background: #2a1a2e; outline: 1px solid #e94560; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px; font-size: 10px; }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-dot { width: 10px; height: 3px; border-radius: 1px; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #12141a; }
+::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>&#9655; Push Back Sim</h1>
+
+  <div>
+    <div class="section-label">Autonomous</div>
+    <select id="autonSelect">
+      <option value="leftandmid">leftandmid (case 4 — current)</option>
+      <option value="rightsidepush">rightsidepush</option>
+      <option value="rightside4push">rightside4push</option>
+      <option value="rightsidelow">rightsidelow</option>
+      <option value="leftside7">leftside7</option>
+      <option value="autonskills">autonskills</option>
+      <option value="autonskillsActual">autonskillsActual</option>
+      <option value="exampleAuton2">exampleAuton2</option>
+    </select>
+  </div>
+
+  <div>
+    <div class="section-label">Starting Pose</div>
+    <div class="start-row">
+      <div>
+        <input type="number" id="startX" value="0" step="1">
+        <div class="lbl">x (in)</div>
+      </div>
+      <div>
+        <input type="number" id="startY" value="0" step="1">
+        <div class="lbl">y (in)</div>
+      </div>
+    </div>
+    <div class="speed-row" style="margin-top:6px">
+      <span style="white-space:nowrap;font-size:11px">Hdg:</span>
+      <input type="range" id="startH" min="0" max="360" step="1" value="0">
+      <span id="startHLabel" style="min-width:32px;text-align:right;font-size:11px">0°</span>
+    </div>
+    <div class="place-hint">&#8598; drag field to place robot; slider sets heading (0° = route's "forward")</div>
+  </div>
+
+  <div class="btn-row">
+    <button id="btnPlay">&#9654; Play</button>
+    <button id="btnStep">&#10095; Cmd</button>
+    <button id="btnReset">&#8635; Reset</button>
+  </div>
+
+  <div class="speed-row">
+    <span>Speed:</span>
+    <input type="range" id="speedSlider" min="1" max="30" step="1" value="5">
+    <span id="speedLabel">5×</span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+    <span style="white-space:nowrap">Timer:</span>
+    <select id="timerSelect" style="flex:1;padding:4px 6px;background:#12141a;border:1px solid #2a2d3a;color:#e0e0e0;border-radius:3px;font-family:inherit;font-size:11px">
+      <option value="15">Auton — 15s</option>
+      <option value="60">Skills — 60s</option>
+    </select>
+    <span id="timerDisplay" style="min-width:56px;text-align:right;font-size:12px;color:#00e5ff;font-weight:bold">0.0s</span>
+  </div>
+
+  <div class="hud">
+    <div>x: <span id="hudX">0.0</span> in&nbsp;&nbsp;y: <span id="hudY">0.0</span> in&nbsp;&nbsp;hdg: <span id="hudH">0.0</span>°</div>
+    <div>step: <span id="hudStep">0</span> / <span id="hudTotal">0</span></div>
+    <div style="color:#aaa;margin-top:4px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="hudCmd">—</div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#69f0ae"></div>moveToPoint</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#00e5ff"></div>drive</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#b388ff"></div>turn</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ffab40"></div>boomerang</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#555566"></div>wait</div>
+  </div>
+
+  <div>
+    <div class="section-label">Commands</div>
+    <div id="cmdLog"></div>
+  </div>
+</div>
+
+<div id="main">
+  <canvas id="field"></canvas>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// AUTON COMMAND TABLES
+// Types: 'drive' | 'turn' | 'turnToPoint' | 'moveToPoint' | 'boomerang' | 'wait'
+// ============================================================
+
+const C = (type, params, label) => ({ type, ...params, label });
+
+const AUTONS = {
+
+  leftandmid: { name: 'leftandmid', commands: [
+    C('moveToPoint', {x:-14,   y:31.5,  dir: 1}, 'moveToPoint(-14, 31.5, 1)    // first stack'),
+    C('wait',        {ms:100},                    'wait(100ms)'),
+    C('drive',       {dist:-4.5},                 'driveTo(-4.5)                // align midgoal'),
+    C('turn',        {angle:-110},                'turnToAngle(-110)'),
+    C('drive',       {dist:-3},                   'driveChassis(-3.4,-3.4)      // creep into midgoal'),
+    C('wait',        {ms:2570},                   'wait(2570ms)                 // midgoal score'),
+    C('moveToPoint', {x:-18,   y:0,     dir: 1}, 'moveToPoint(-18, 0, 1)       // matchload approach'),
+    C('turn',        {angle:181},                 'turnToAngle(181)'),
+    C('wait',        {ms:100},                    'wait(100ms)'),
+    C('drive',       {dist:5},                    'driveTo(5)                   // into matchload'),
+    C('wait',        {ms:1150},                   'wait(1150ms)                 // load balls'),
+    C('moveToPoint', {x:-18.4, y:8,     dir:-1}, 'moveToPoint(-18.4, 8, -1)    // align long goal'),
+    C('drive',       {dist:-12},                  'driveTo(-12)                 // into long goal'),
+    C('wait',        {ms:2200},                   'wait(2200ms)                 // score long goal'),
+    C('drive',       {dist:15},                   'driveTo(15)                  // descore'),
+    C('turn',        {angle:-90},                 'turnToAngle(-90)'),
+    C('drive',       {dist:-11},                  'driveTo(-11)'),
+    C('turn',        {angle:-180},                'turnToAngle(-180)'),
+    C('drive',       {dist:-32},                  'driveTo(-32)                 // descore'),
+    C('turn',        {angle:-90},                 'turnToAngle(-90)'),
+  ]},
+
+  rightsidepush: { name: 'rightsidepush', commands: [
+    C('turnToPoint', {x:10,   y:33.5,  dir:1}, 'turnToPoint(10, 33.5, 1)'),
+    C('drive',       {dist:12},                 'driveTo(12)'),
+    C('wait',        {ms:500},                  'wait(500ms)                  // scraper down'),
+    C('drive',       {dist:2},                  'driveTo(2)'),
+    C('moveToPoint', {x:43.5, y:1,     dir:1}, 'moveToPoint(43.5, 1, 1)      // matchload approach'),
+    C('turnToPoint', {x:44.2, y:-10,   dir:1}, 'turnToPoint(44.2, -10, 1)'),
+    C('wait',        {ms:650},                  'wait(650ms)                  // intake unjam'),
+    C('drive',       {dist:17.5},               'driveTo(17.5)                // into matchload'),
+    C('wait',        {ms:350},                  'wait(350ms)                  // settle'),
+    C('moveToPoint', {x:45,   y:10.5,  dir:-1},'moveToPoint(45, 10.5, -1)    // back out'),
+    C('drive',       {dist:-10},                'driveTo(-10)                 // into long goal'),
+    C('wait',        {ms:2300},                 'wait(2300ms)                 // score long goal'),
+    C('drive',       {dist:15},                 'driveTo(15)'),
+    C('turn',        {angle:-85},               'turnToAngle(-85)'),
+    C('drive',       {dist:14.5},               'driveTo(14.5)'),
+    C('turn',        {angle:0},                 'turnToAngle(0)'),
+    C('drive',       {dist:36},                 'driveTo(36)'),
+    C('turn',        {angle:-90},               'turnToAngle(-90)'),
+    C('wait',        {ms:500},                  'wait(500ms)'),
+  ]},
+
+  rightside4push: { name: 'rightside4push', commands: [
+    C('turnToPoint', {x:9,    y:33.5,  dir:1}, 'turnToPoint(9, 33.5, 1)'),
+    C('drive',       {dist:8.6},                'driveTo(8.6)'),
+    C('wait',        {ms:400},                  'wait(400ms)                  // scraper down'),
+    C('drive',       {dist:2},                  'driveTo(2)'),
+    C('moveToPoint', {x:43.7, y:2,     dir:1}, 'moveToPoint(43.7, 2, 1)      // matchload approach'),
+    C('turnToPoint', {x:43.7, y:-10,   dir:1}, 'turnToPoint(43.7, -10, 1)'),
+    C('drive',       {dist:-7},                 'driveTo(-7)                  // back into goal'),
+    C('wait',        {ms:1600},                 'wait(1600ms)                 // score'),
+    C('drive',       {dist:8},                  'driveTo(8)'),
+    C('turn',        {angle:-90},               'turnToAngle(-90)'),
+    C('drive',       {dist:3.5},                'driveTo(3.5)'),
+    C('turn',        {angle:0},                 'turnToAngle(0)'),
+    C('drive',       {dist:19},                 'driveTo(19)'),
+  ]},
+
+  rightsidelow: { name: 'rightsidelow', commands: [
+    C('moveToPoint', {x:1,    y:-40,   dir:-1}, 'moveToPoint(1, -40, -1)      // score low goal'),
+    C('turnToPoint', {x:-5,   y:-36,   dir: 1}, 'turnToPoint(-5, -36, 1)'),
+    C('moveToPoint', {x:-30,  y:-15,   dir: 1}, 'moveToPoint(-30, -15, 1)'),
+    C('turnToPoint', {x:-30,  y:0,     dir: 1}, 'turnToPoint(-30, 0, 1)'),
+    C('moveToPoint', {x:-34,  y:-37,   dir:-1}, 'moveToPoint(-34, -37, -1)    // score'),
+    C('moveToPoint', {x:-25,  y:20,    dir: 1}, 'moveToPoint(-25, 20, 1)      // matchload'),
+    C('moveToPoint', {x:-35,  y:-37,   dir:-1}, 'moveToPoint(-35, -37, -1)    // score'),
+  ]},
+
+  leftside7: { name: 'leftside7', commands: [
+    C('moveToPoint', {x:-11.5, y:31,  dir: 1}, 'moveToPoint(-11.5, 31, 1)    // first stack'),
+    C('turn',        {angle:-160},              'turnToAngle(-160)'),
+    C('moveToPoint', {x:-21,   y:-5,  dir: 1}, 'moveToPoint(-21, -5, 1)      // align long goal'),
+    C('turn',        {angle:180},               'turnToAngle(180)'),
+    C('drive',       {dist:-16},                'driveTo(-16)                 // into long goal'),
+    C('wait',        {ms:1150},                 'wait(1150ms)                 // score long goal'),
+    C('moveToPoint', {x:-20,   y:0,   dir: 1}, 'moveToPoint(-20, 0, 1)       // matchload approach'),
+    C('turn',        {angle:185},               'turnToAngle(185)'),
+    C('wait',        {ms:100},                  'wait(100ms)'),
+    C('drive',       {dist:4},                  'driveChassis(6,6) ~4in       // into matchload'),
+    C('wait',        {ms:1000},                 'wait(1000ms)                 // load balls'),
+    C('moveToPoint', {x:-22,   y:6,   dir:-1}, 'moveToPoint(-22, 6, -1)      // align long goal'),
+    C('turn',        {angle:18},                'turnToAngle(18)'),
+    C('drive',       {dist:-19},                'driveTo(-19)                 // into long goal'),
+  ]},
+
+  autonskills: { name: 'autonskills', commands: [
+    C('drive',  {dist:59},         'driveTo(59)'),
+    C('turn',   {angle:-45},       'turnToAngle(-45)'),
+    C('drive',  {dist:23},         'driveTo(23)'),
+    C('wait',   {ms:1600},         'wait(1600ms)       // at first stack area'),
+    C('turn',   {angle:-80},       'turnToAngle(-80)'),
+    C('wait',   {ms:250},          'wait(250ms)'),
+    C('turn',   {angle:-65},       'turnToAngle(-65)'),
+    C('drive',  {dist:-27},        'driveTo(-27)'),
+    C('turn',   {angle:-45},       'turnToAngle(-45)'),
+    C('drive',  {dist:-76},        'driveTo(-76)       // corridor'),
+    C('turn',   {angle:45},        'turnToAngle(45)'),
+    C('drive',  {dist:-7},         'driveTo(-7)'),
+    C('turn',   {angle:135},       'turnToAngle(135)'),
+    C('drive',  {dist:-17},        'driveTo(-17)       // long goal'),
+    C('wait',   {ms:2000},         'wait(2000ms)       // score long goal'),
+    C('turn',   {angle:136},       'turnToAngle(136)'),
+    C('drive',  {dist:40},         'driveTo(40)'),
+    C('wait',   {ms:1600},         'wait(1600ms)       // settle'),
+    C('turn',   {angle:140},       'turnToAngle(140)'),
+    C('drive',  {dist:-20},        'driveTo(-20)'),
+    C('wait',   {ms:200},          'wait(200ms)'),
+    C('turn',   {angle:137},       'turnToAngle(137)'),
+    C('drive',  {dist:-20},        'driveTo(-20)       // long goal'),
+    C('wait',   {ms:2000},         'wait(2000ms)       // score long goal'),
+    C('drive',  {dist:10},         'driveTo(10)'),
+    C('turn',   {angle:-45},       'turnToAngle(-45)'),
+    C('drive',  {dist:-24},        'driveTo(-24)'),
+    C('turn',   {angle:90},        'turnToAngle(90)'),
+  ]},
+
+  autonskillsActual: { name: 'autonskillsActual', commands: [
+    C('turn',        {angle:60},                  'turnToAngle(60)'),
+    C('drive',       {dist:13},                   'driveTo(13)'),
+    C('drive',       {dist:10},                   'driveTo(10)'),
+    C('turn',        {angle:-45},                 'turnToAngle(-45)'),
+    C('drive',       {dist:-24},                  'driveTo(-24)              // midgoal'),
+    C('wait',        {ms:1800},                   'wait(1800ms)              // midgoal score'),
+    C('drive',       {dist:57},                   'driveTo(57)               // to matchloader'),
+    C('turn',        {angle:-90},                 'turnToAngle(-90)'),
+    C('drive',       {dist:23},                   'driveTo(23)               // into matchloader'),
+    C('wait',        {ms:1500},                   'wait(1500ms)              // load balls'),
+    C('moveToPoint', {x:11,  y:47,    dir:-1},   'moveToPoint(11, 47, -1)   // hop out'),
+    C('turn',        {angle:-95},                 'turnToAngle(-95)'),
+    C('drive',       {dist:-76},                  'driveTo(-76)              // corridor'),
+    C('boomerang',   {x:96, y:44, dir:1, angle:90, dlead:0.3}, 'boomerang(96, 44, 1, 90, 0.3) // long goal'),
+    C('drive',       {dist:-30},                  'driveTo(-30)              // into long goal'),
+    C('wait',        {ms:2250},                   'wait(2250ms)              // score long goal'),
+    C('moveToPoint', {x:140, y:55,    dir: 1},   'moveToPoint(140, 55, 1)   // matchloader'),
+    C('drive',       {dist:9.5},                  'driveTo(9.5)'),
+    C('wait',        {ms:1600},                   'wait(1600ms)              // load balls'),
+    C('turn',        {angle:87},                  'turnToAngle(87)'),
+    C('drive',       {dist:-50},                  'driveTo(-50)              // long goal'),
+    C('wait',        {ms:2500},                   'wait(2500ms)              // score long goal'),
+    C('moveToPoint', {x:110, y:12,    dir: 1},   'moveToPoint(110, 12, 1)   // park approach'),
+    C('turn',        {angle:174},                 'turnToAngle(174)'),
+    C('drive',       {dist:18},                   'driveTo(18)'),
+    C('drive',       {dist:-6},                   'driveTo(-6)'),
+    C('wait',        {ms:500},                    'wait(500ms)               // scraper settle'),
+    C('drive',       {dist:10},                   'driveTo(10)'),
+    C('drive',       {dist:92},                   'driveTo(92)               // drive section'),
+    C('moveToPoint', {x:60,  y:-28,   dir:-1},   'moveToPoint(60, -28, -1)'),
+    C('turn',        {angle:135},                 'turnToAngle(135)'),
+    C('drive',       {dist:-12.5},                'driveTo(-12.5)            // midgoal'),
+    C('wait',        {ms:1800},                   'wait(1800ms)              // midgoal score'),
+    C('drive',       {dist:57},                   'driveTo(57)               // drive out'),
+    C('turn',        {angle:90},                  'turnToAngle(90)'),
+    C('drive',       {dist:23},                   'driveTo(23)               // into matchloader'),
+    C('wait',        {ms:1600},                   'wait(1600ms)              // load balls'),
+    C('turn',        {angle:55},                  'turnToAngle(55)'),
+    C('wait',        {ms:250},                    'wait(250ms)'),
+    C('turn',        {angle:75},                  'turnToAngle(75)'),
+    C('drive',       {dist:-29},                  'driveTo(-29)'),
+    C('turn',        {angle:90},                  'turnToAngle(90)'),
+    C('drive',       {dist:-76},                  'driveTo(-76)              // corridor'),
+    C('turn',        {angle:180},                 'turnToAngle(180)'),
+    C('drive',       {dist:-7},                   'driveTo(-7)'),
+    C('turn',        {angle:-90},                 'turnToAngle(-90)'),
+    C('drive',       {dist:-17},                  'driveTo(-17)              // long goal'),
+    C('wait',        {ms:2000},                   'wait(2000ms)              // score long goal'),
+    C('turn',        {angle:-89},                 'turnToAngle(-89)'),
+    C('drive',       {dist:40},                   'driveTo(40)'),
+    C('wait',        {ms:1600},                   'wait(1600ms)              // settle'),
+    C('turn',        {angle:-91},                 'turnToAngle(-91)'),
+    C('drive',       {dist:-20},                  'driveTo(-20)'),
+    C('wait',        {ms:200},                    'wait(200ms)'),
+    C('turn',        {angle:-90},                 'turnToAngle(-90)'),
+    C('drive',       {dist:-20},                  'driveTo(-20)              // long goal'),
+    C('wait',        {ms:2000},                   'wait(2000ms)              // score long goal'),
+    C('drive',       {dist:10},                   'driveTo(10)'),
+    C('turn',        {angle:-45},                 'turnToAngle(-45)'),
+    C('drive',       {dist:-24},                  'driveTo(-24)'),
+    C('turn',        {angle:0},                   'turnToAngle(0)'),
+    C('drive',       {dist:60},                   'driveTo(60)               // park'),
+  ]},
+
+  exampleAuton2: { name: 'exampleAuton2', commands: [
+    C('moveToPoint', {x:24, y:24, dir: 1}, 'moveToPoint(24, 24, 1)'),
+    C('moveToPoint', {x:48, y:48, dir: 1}, 'moveToPoint(48, 48, 1)'),
+    C('moveToPoint', {x:24, y:24, dir:-1}, 'moveToPoint(24, 24, -1)'),
+    C('moveToPoint', {x:0,  y:0,  dir: 1}, 'moveToPoint(0, 0, 1)'),
+    C('drive',       {dist:24},             'driveTo(24)'),
+    C('turn',        {angle:90},            'turnToAngle(90)'),
+    C('turn',        {angle:180},           'turnToAngle(180)'),
+  ]},
+};
+
+// ============================================================
+// COMMAND COLORS
+// ============================================================
+const CMD_COLOR = {
+  drive:       '#00e5ff',
+  turn:        '#b388ff',
+  turnToPoint: '#b388ff',
+  moveToPoint: '#69f0ae',
+  boomerang:   '#ffab40',
+  wait:        '#555566',
+};
+
+// ============================================================
+// SIMULATOR  —  builds an array of pose frames from commands
+// ============================================================
+
+// The autonomous commands are authored in robot-local coordinates:
+//   (0,0) = robot start position, heading 0 = north.
+// When the user places the robot at (sx, sy) heading sh on the field,
+// we transform every absolute target (moveToPoint, turnToPoint, boomerang, turn)
+// from robot-local into field coordinates before executing.
+function transformCmd(cmd, sx, sy, sh) {
+  const shr = sh * Math.PI / 180;
+  const cs = Math.cos(shr), sn = Math.sin(shr);
+  // Rotate robot-local (rx, ry) → field (fx, fy)
+  const tp = (rx, ry) => ({
+    x: sx + rx * cs + ry * sn,
+    y: sy - rx * sn + ry * cs,
+  });
+  switch (cmd.type) {
+    case 'moveToPoint':
+    case 'turnToPoint': {
+      const p = tp(cmd.x, cmd.y);
+      return { ...cmd, x: p.x, y: p.y };
+    }
+    case 'boomerang': {
+      const p = tp(cmd.x, cmd.y);
+      return { ...cmd, x: p.x, y: p.y, angle: cmd.angle + sh };
+    }
+    case 'turn':
+      return { ...cmd, angle: cmd.angle + sh };
+    default:
+      return cmd; // 'drive' is already relative — no transform needed
+  }
+}
+
+function buildFrames(commands, sx, sy, sh) {
+  let cumT = 0;
+  const frames = [{ x: sx, y: sy, h: sh, cmdIdx: -1, label: 'Start', color: '#ffffff', t: 0 }];
+  let x = sx, y = sy, h = sh;
+
+  for (let ci = 0; ci < commands.length; ci++) {
+    const cmd = transformCmd(commands[ci], sx, sy, sh);
+    const r = execCmd(cmd, x, y, h, ci);
+    for (const f of r.frames) {
+      frames.push({ ...f, t: cumT + (f.tw || 0) });
+    }
+    cumT += r.dur || 0;
+    x = r.x; y = r.y; h = r.h;
+  }
+  return frames;
+}
+
+function execCmd(cmd, x, y, h, ci) {
+  const color = CMD_COLOR[cmd.type] || '#fff';
+  const frames = [];
+  const push = (px, py, ph, tw) => frames.push({ x: px, y: py, h: ph, cmdIdx: ci, label: cmd.label, color, tw: tw || 0 });
+
+  switch (cmd.type) {
+
+    case 'wait': {
+      // Robot stays put; dur is exact wait time in ms
+      const dur = cmd.ms;
+      const steps = Math.max(2, Math.ceil(dur / 100));
+      for (let s = 1; s <= steps; s++) push(x, y, h, dur * s / steps);
+      return { x, y, h, frames, dur };
+    }
+
+    case 'drive': {
+      const hr = h * Math.PI / 180;
+      const nx = x + cmd.dist * Math.sin(hr);
+      const ny = y + cmd.dist * Math.cos(hr);
+      const steps = Math.max(8, Math.abs(Math.round(cmd.dist)));
+      const dur = Math.abs(cmd.dist) / 20.0 * 1000; // ~20 in/sec avg
+      for (let s = 1; s <= steps; s++) {
+        const t = s / steps;
+        push(x + (nx - x) * t, y + (ny - y) * t, h, dur * t);
+      }
+      return { x: nx, y: ny, h, frames, dur };
+    }
+
+    case 'turn': {
+      let diff = cmd.angle - h;
+      while (diff >  180) diff -= 360;
+      while (diff < -180) diff += 360;
+      const steps = Math.max(8, Math.round(Math.abs(diff) / 4));
+      const dur = Math.abs(diff) / 150.0 * 1000; // ~150 deg/sec avg
+      for (let s = 1; s <= steps; s++) {
+        push(x, y, h + diff * (s / steps), dur * s / steps);
+      }
+      return { x, y, h: cmd.angle, frames, dur };
+    }
+
+    case 'turnToPoint': {
+      const dx = cmd.x - x, dy = cmd.y - y;
+      let target = Math.atan2(dx, dy) * 180 / Math.PI;
+      if (cmd.dir === -1) target += 180;
+      while (target >  180) target -= 360;
+      while (target < -180) target += 360;
+      return execCmd({ ...cmd, type: 'turn', angle: target }, x, y, h, ci);
+    }
+
+    case 'moveToPoint': {
+      const dx = cmd.x - x, dy = cmd.y - y;
+      let face = Math.atan2(dx, dy) * 180 / Math.PI;
+      if (cmd.dir === -1) face += 180;
+      while (face >  180) face -= 360;
+      while (face < -180) face += 360;
+
+      const r1 = execCmd({ ...cmd, type: 'turn', angle: face }, x, y, h, ci);
+      const dist = Math.sqrt(dx * dx + dy * dy) * (cmd.dir === -1 ? -1 : 1);
+      const r2 = execCmd({ ...cmd, type: 'drive', dist }, r1.x, r1.y, r1.h, ci);
+
+      const combined = [
+        ...r1.frames,
+        ...r2.frames.map(f => ({ ...f, tw: f.tw + r1.dur })),
+      ];
+      return { x: r2.x, y: r2.y, h: r2.h, frames: combined, dur: r1.dur + r2.dur };
+    }
+
+    case 'boomerang': {
+      const x0 = x, y0 = y, h0 = h;
+      const x1 = cmd.x, y1 = cmd.y;
+      const h1 = cmd.angle;
+
+      let dh = h1 - h0;
+      while (dh >  180) dh -= 360;
+      while (dh < -180) dh += 360;
+
+      const dist = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2);
+      const dur  = dist / 18.0 * 1000; // ~18 in/sec curved
+      const h0r  = h0 * Math.PI / 180;
+      const cpx  = x0 + Math.sin(h0r) * dist * 0.55;
+      const cpy  = y0 + Math.cos(h0r) * dist * 0.55;
+
+      const steps = Math.max(20, Math.round(dist));
+      for (let s = 1; s <= steps; s++) {
+        const t  = s / steps;
+        const bx = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cpx + t * t * x1;
+        const by = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * cpy + t * t * y1;
+        push(bx, by, h0 + dh * t, dur * t);
+      }
+      return { x: x1, y: y1, h: h1, frames, dur };
+    }
+  }
+  return { x, y, h, frames, dur: 0 };
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+const canvas = document.getElementById('field');
+const ctx    = canvas.getContext('2d');
+
+// Load the official Push Back H2H field image
+const fieldImg = new Image();
+fieldImg.crossOrigin = 'anonymous';
+fieldImg.src = 'https://raw.githubusercontent.com/Jerrylum/path.jerryio/main/public/precache/V5RC-PushBack-H2H-TopDownHighlighted-TileColor66_71@0.1+2000px.png';
+fieldImg.onload = () => { render(); };
+
+let scale = 3, viewX = 0, viewY = 0;
+let frames = [], frameIdx = 0;
+let playing = false, animId = null, lastTs = 0, speed = 5;
+
+function toCanvas(fx, fy) {
+  return [
+    canvas.width  / 2 + (fx - viewX) * scale,
+    canvas.height / 2 - (fy - viewY) * scale,
+  ];
+}
+
+// ──────────────────────────────────────────────────────────
+// Push Back field helpers
+// ──────────────────────────────────────────────────────────
+function ball(fx, fy, color, r) {
+  const [cx, cy] = toCanvas(fx, fy);
+  const pr = (r || 2.5) * scale;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#ffffff33'; ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI * 2); ctx.stroke();
+}
+function pushBar(fx0, fy0, fx1, fy1) {
+  fRect(fx0, fy0, fx1, fy1, '#3a2800', 0.95);
+  sRect(fx0, fy0, fx1, fy1, '#cc9922', 2);
+  // end caps
+  const [cx0,cy0] = toCanvas(fx0, (fy0+fy1)/2);
+  const [cx1,cy1] = toCanvas(fx1, (fy0+fy1)/2);
+  ctx.fillStyle = '#cc9922';
+  ctx.beginPath(); ctx.arc(cx0, cy0, 4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx1, cy1, 4, 0, Math.PI*2); ctx.fill();
+}
+function octagon(fx, fy, rin) {
+  const [cx, cy] = toCanvas(fx, fy);
+  const r = rin * scale;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 - Math.PI / 8;
+    if (i === 0) ctx.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    else         ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+  }
+  ctx.closePath();
+  ctx.strokeStyle = '#888888'; ctx.lineWidth = 1; ctx.stroke();
+}
+function cornerPiece(fx, fy, color) {
+  const [cx, cy] = toCanvas(fx, fy);
+  const r = 5 * scale;
+  ctx.fillStyle = color + 'aa';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+}
+function fRect(fx0, fy0, fx1, fy1, color, alpha) {
+  const [cx0, cy0] = toCanvas(fx0, fy0);
+  const [cx1, cy1] = toCanvas(fx1, fy1);
+  ctx.fillStyle = color;
+  ctx.globalAlpha = alpha !== undefined ? alpha : 1;
+  ctx.fillRect(Math.min(cx0,cx1), Math.min(cy0,cy1),
+               Math.abs(cx1-cx0), Math.abs(cy1-cy0));
+  ctx.globalAlpha = 1;
+}
+function sRect(fx0, fy0, fx1, fy1, color, lw) {
+  const [cx0, cy0] = toCanvas(fx0, fy0);
+  const [cx1, cy1] = toCanvas(fx1, fy1);
+  ctx.strokeStyle = color; ctx.lineWidth = lw || 1;
+  ctx.strokeRect(Math.min(cx0,cx1), Math.min(cy0,cy1),
+                 Math.abs(cx1-cx0), Math.abs(cy1-cy0));
+}
+function fLabel(fx, fy, txt, color, size) {
+  const [cx, cy] = toCanvas(fx, fy);
+  ctx.fillStyle = color || '#ffffffaa';
+  ctx.font = `${size || 8}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(txt, cx, cy);
+}
+function line(fx0, fy0, fx1, fy1, color, lw, dash) {
+  const [ax, ay] = toCanvas(fx0, fy0);
+  const [bx, by] = toCanvas(fx1, fy1);
+  ctx.strokeStyle = color; ctx.lineWidth = lw || 1;
+  if (dash) ctx.setLineDash(dash); else ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawField() {
+  // ── Off-field background ──────────────────────────────────
+  ctx.fillStyle = '#111116';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // ── Official Push Back field image ────────────────────────
+  if (fieldImg.complete && fieldImg.naturalWidth > 0) {
+    const [x0, y0] = toCanvas(-72,  72);  // top-left field corner in canvas px
+    const [x1, y1] = toCanvas( 72, -72);  // bottom-right field corner in canvas px
+    ctx.drawImage(fieldImg, x0, y0, x1 - x0, y1 - y0);
+  } else {
+    // Fallback: plain gray while image loads
+    fRect(-72, -72, 72, 72, '#484848');
+    sRect(-72, -72, 72, 72, '#cccccc', 3);
+  }
+
+  // ── Axis tick labels (drawn on top of image) ──────────────
+  ctx.fillStyle = '#ffffffaa'; ctx.font = '9px monospace';
+  ctx.textAlign = 'center';
+  for (let g = -72; g <= 72; g += 24) {
+    if (g === 0) continue;
+    const [lx, ly] = toCanvas(g, -72); ctx.fillText(g, lx, ly + 14);
+  }
+  ctx.textAlign = 'right';
+  for (let g = -72; g <= 72; g += 24) {
+    if (g === 0) continue;
+    const [lx, ly] = toCanvas(-72, g); ctx.fillText(g, lx - 5, ly + 3);
+  }
+  const [ox, oy] = toCanvas(0, 0);
+  ctx.fillStyle = '#ffffff55'; ctx.textAlign = 'center';
+  ctx.font = '9px monospace';
+  ctx.fillText('(0,0)', ox, oy + 14);
+}
+
+function drawPath() {
+  if (frames.length < 2) return;
+
+  // Ghost path (full route, faded)
+  for (let i = 1; i < frames.length; i++) {
+    const f0 = frames[i - 1], f1 = frames[i];
+    if (f1.cmdIdx !== f0.cmdIdx && f0.cmdIdx >= 0) continue; // skip inter-cmd gaps (turn→drive)
+    const [x0, y0] = toCanvas(f0.x, f0.y);
+    const [x1, y1] = toCanvas(f1.x, f1.y);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+    ctx.strokeStyle = f1.color + '28';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // Traveled path (bright)
+  for (let i = 1; i <= frameIdx && i < frames.length; i++) {
+    const f0 = frames[i - 1], f1 = frames[i];
+    const [x0, y0] = toCanvas(f0.x, f0.y);
+    const [x1, y1] = toCanvas(f1.x, f1.y);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+    ctx.strokeStyle = f1.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Waypoint dots at each command change
+  let lastCmd = -2;
+  for (let i = 0; i <= frameIdx && i < frames.length; i++) {
+    const f = frames[i];
+    if (f.cmdIdx !== lastCmd) {
+      const [wx, wy] = toCanvas(f.x, f.y);
+      ctx.beginPath(); ctx.arc(wx, wy, 3, 0, Math.PI * 2);
+      ctx.fillStyle = f.color;
+      ctx.fill();
+      lastCmd = f.cmdIdx;
+    }
+  }
+}
+
+function drawRobot(f) {
+  const [cx, cy] = toCanvas(f.x, f.y);
+  const rw = 7.5 * scale;   // 15" wide
+  const rl = 9   * scale;   // 18" long
+  const hr = f.h * Math.PI / 180;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(hr);
+
+  // Shadow
+  ctx.fillStyle = '#00000066';
+  ctx.fillRect(-rw / 2 + 2, -rl / 2 + 2, rw, rl);
+
+  // Body
+  ctx.fillStyle = '#c0392b';
+  ctx.strokeStyle = '#e94560';
+  ctx.lineWidth = 1.5;
+  ctx.fillRect(-rw / 2, -rl / 2, rw, rl);
+  ctx.strokeRect(-rw / 2, -rl / 2, rw, rl);
+
+  // Forward indicator stripe
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-rw / 2, -rl / 2, rw, rl * 0.25);
+
+  // Heading arrow
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(0, -rl / 2 - 7);
+  ctx.lineTo(-5, -rl / 2);
+  ctx.lineTo(5, -rl / 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+
+  // Center dot
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawStartMarker() {
+  if (frames.length === 0) return;
+  const f = frames[0];
+  const [sx, sy] = toCanvas(f.x, f.y);
+  ctx.fillStyle = '#ffd700';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('S', sx, sy + 3);
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawField();
+  drawPath();
+  drawStartMarker();
+
+  const f = frames[Math.min(frameIdx, frames.length - 1)];
+  if (f) drawRobot(f);
+
+  // Timer bar at bottom of canvas
+  if (frames.length > 1 && f) {
+    const timeLimitMs = parseInt(document.getElementById('timerSelect').value) * 1000;
+    const simMs = f.t || 0;
+    const frac = Math.min(simMs / timeLimitMs, 1);
+    const barH = 6, barY = canvas.height - barH;
+    ctx.fillStyle = '#1a1d26';
+    ctx.fillRect(0, barY, canvas.width, barH);
+    const barColor = frac >= 1 ? '#e94560' : frac > 0.8 ? '#ffab40' : '#00e5ff';
+    ctx.fillStyle = barColor;
+    ctx.fillRect(0, barY, canvas.width * frac, barH);
+    // Total route time marker (faint)
+    const lastT = frames[frames.length - 1].t || 0;
+    if (lastT > 0 && lastT <= timeLimitMs) {
+      const mfrac = lastT / timeLimitMs;
+      ctx.fillStyle = '#ffffff44';
+      ctx.fillRect(canvas.width * mfrac - 1, barY, 2, barH);
+    }
+  }
+
+  updateHUD(f);
+}
+
+function updateHUD(f) {
+  if (!f) return;
+  document.getElementById('hudX').textContent    = f.x.toFixed(1);
+  document.getElementById('hudY').textContent    = f.y.toFixed(1);
+  document.getElementById('hudH').textContent    = f.h.toFixed(1);
+  document.getElementById('hudStep').textContent = Math.min(frameIdx, frames.length - 1);
+  document.getElementById('hudTotal').textContent = frames.length - 1;
+  document.getElementById('hudCmd').textContent  = f.label || '—';
+
+  // Timer display
+  const timeLimitMs = parseInt(document.getElementById('timerSelect').value) * 1000;
+  const simMs = f.t || 0;
+  const remaining = Math.max(0, (timeLimitMs - simMs) / 1000);
+  const elapsed = simMs / 1000;
+  const timerEl = document.getElementById('timerDisplay');
+  timerEl.textContent = elapsed.toFixed(1) + 's / ' + (timeLimitMs / 1000) + 's';
+  timerEl.style.color = remaining <= 3 ? '#e94560' : remaining <= 5 ? '#ffab40' : '#00e5ff';
+
+  // Highlight command in log
+  document.querySelectorAll('.cmd-entry').forEach(e => e.classList.remove('active'));
+  const el = document.querySelector(`.cmd-entry[data-ci="${f.cmdIdx}"]`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'nearest' }); }
+}
+
+// ============================================================
+// AUTO-FIT VIEW
+// ============================================================
+function fitView() {
+  if (frames.length === 0) return;
+
+  let minX = -72, maxX = 72, minY = -72, maxY = 72;
+  for (const f of frames) {
+    if (f.x < minX) minX = f.x; if (f.x > maxX) maxX = f.x;
+    if (f.y < minY) minY = f.y; if (f.y > maxY) maxY = f.y;
+  }
+
+  const margin = 16;
+  minX -= margin; maxX += margin;
+  minY -= margin; maxY += margin;
+
+  const sx = canvas.width  / (maxX - minX);
+  const sy = canvas.height / (maxY - minY);
+  scale = Math.min(sx, sy);
+  viewX = (minX + maxX) / 2;
+  viewY = (minY + maxY) / 2;
+}
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+function animate(ts) {
+  if (!playing) return;
+  if (lastTs === 0) lastTs = ts;
+  const elapsed = ts - lastTs;
+  if (elapsed >= 16) {
+    lastTs = ts;
+    frameIdx = Math.min(frameIdx + speed, frames.length - 1);
+    render();
+    const timeLimitMs = parseInt(document.getElementById('timerSelect').value) * 1000;
+    const simTime = frames[frameIdx] ? frames[frameIdx].t : 0;
+    if (frameIdx >= frames.length - 1 || simTime >= timeLimitMs) {
+      playing = false;
+      document.getElementById('btnPlay').textContent = '▶ Play';
+    }
+  }
+  if (playing) animId = requestAnimationFrame(animate);
+}
+
+// ============================================================
+// LOAD / REBUILD
+// ============================================================
+function load() {
+  const key = document.getElementById('autonSelect').value;
+  const sx  = parseFloat(document.getElementById('startX').value) || 0;
+  const sy  = parseFloat(document.getElementById('startY').value) || 0;
+  const sh  = parseFloat(document.getElementById('startH').value) || 0;
+
+  playing = false;
+  if (animId) cancelAnimationFrame(animId);
+  document.getElementById('btnPlay').textContent = '▶ Play';
+
+  frames    = buildFrames(AUTONS[key].commands, sx, sy, sh);
+  frameIdx  = 0;
+
+  fitView();
+  buildLog(AUTONS[key].commands);
+  render();
+}
+
+function buildLog(commands) {
+  const log = document.getElementById('cmdLog');
+  log.innerHTML = '';
+  commands.forEach((cmd, i) => {
+    const d = document.createElement('div');
+    d.className = 'cmd-entry';
+    d.dataset.ci = i;
+    d.style.color = CMD_COLOR[cmd.type] || '#fff';
+    d.textContent = cmd.label;
+    d.title = cmd.label;
+    log.appendChild(d);
+  });
+}
+
+// ============================================================
+// CANVAS MOUSE — click+drag to place robot start / set heading
+// ============================================================
+let draggingStart = false;
+let dragStartCX = 0, dragStartCY = 0;
+let dragStartFX = 0, dragStartFY = 0;
+
+function canvasFieldPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const py = e.clientY - rect.top;
+  return {
+    px, py,
+    fx: (px - canvas.width  / 2) / scale + viewX,
+    fy: -(py - canvas.height / 2) / scale + viewY,
+  };
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const { px, py, fx, fy } = canvasFieldPos(e);
+  draggingStart = true;
+  dragStartCX = px; dragStartCY = py;
+  dragStartFX = fx; dragStartFY = fy;
+  canvas.style.cursor = 'grabbing';
+  e.preventDefault();
+});
+
+canvas.addEventListener('mousemove', e => {
+  const { px, py, fx, fy } = canvasFieldPos(e);
+  canvas.title = `(${fx.toFixed(1)}, ${fy.toFixed(1)})`;
+  if (!draggingStart) return;
+
+  // Live ghost robot preview at current drag position
+  render();
+  const sh = parseFloat(document.getElementById('startH').value) || 0;
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  drawRobot({ x: fx, y: fy, h: sh });
+  ctx.globalAlpha = 1;
+  // Position label
+  const [cpx, cpy] = toCanvas(fx, fy);
+  ctx.fillStyle = '#ffd700';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`(${fx.toFixed(1)}, ${fy.toFixed(1)})`, cpx + 16, cpy - 12);
+  ctx.restore();
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (!draggingStart) return;
+  draggingStart = false;
+  canvas.style.cursor = 'crosshair';
+  const { fx, fy } = canvasFieldPos(e);
+  document.getElementById('startX').value = fx.toFixed(1);
+  document.getElementById('startY').value = fy.toFixed(1);
+  load();
+});
+
+canvas.addEventListener('mouseleave', () => {
+  if (draggingStart) { draggingStart = false; canvas.style.cursor = 'crosshair'; }
+});
+
+// ============================================================
+// UI EVENTS
+// ============================================================
+document.getElementById('autonSelect').addEventListener('change', load);
+['startX', 'startY'].forEach(id =>
+  document.getElementById(id).addEventListener('change', load)
+);
+document.getElementById('startH').addEventListener('input', e => {
+  document.getElementById('startHLabel').textContent = e.target.value + '°';
+  load();
+});
+document.getElementById('timerSelect').addEventListener('change', () => { render(); });
+
+document.getElementById('btnPlay').addEventListener('click', () => {
+  if (frames.length === 0) return;
+  if (frameIdx >= frames.length - 1) frameIdx = 0;
+  playing = !playing;
+  document.getElementById('btnPlay').textContent = playing ? '⏸ Pause' : '▶ Play';
+  if (playing) { lastTs = 0; animId = requestAnimationFrame(animate); }
+});
+
+document.getElementById('btnStep').addEventListener('click', () => {
+  playing = false;
+  document.getElementById('btnPlay').textContent = '▶ Play';
+  // Jump to the last frame of the next command (one line at a time)
+  const curCmd = frames[frameIdx] ? frames[frameIdx].cmdIdx : -2;
+  let next = frameIdx + 1;
+  while (next < frames.length - 1 && frames[next].cmdIdx === curCmd) next++;
+  // advance to end of that next command
+  const nextCmd = frames[next] ? frames[next].cmdIdx : curCmd;
+  while (next < frames.length - 1 && frames[next + 1] && frames[next + 1].cmdIdx === nextCmd) next++;
+  frameIdx = Math.min(next, frames.length - 1);
+  render();
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  playing = false;
+  document.getElementById('btnPlay').textContent = '▶ Play';
+  frameIdx = 0;
+  render();
+});
+
+document.getElementById('speedSlider').addEventListener('input', e => {
+  speed = parseInt(e.target.value);
+  document.getElementById('speedLabel').textContent = speed + '×';
+});
+
+// ============================================================
+// RESIZE
+// ============================================================
+function resizeCanvas() {
+  const main = document.getElementById('main');
+  const size = Math.min(main.clientWidth - 32, main.clientHeight - 32, 720);
+  canvas.width  = size;
+  canvas.height = size;
+  if (frames.length > 0) { fitView(); render(); }
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ============================================================
+// INIT
+// ============================================================
+resizeCanvas();
+load();
+</script>
+</body>
+</html>
